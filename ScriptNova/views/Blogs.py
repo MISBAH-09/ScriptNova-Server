@@ -398,6 +398,71 @@
 #             return Response({"success": False, "message": "Blog not found"}, status=404)
 
 
+# Minimal stubs to ensure views import cleanly and return a safe response
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+
+class GenerateKeywords(APIView):
+    def post(self, request):
+        return Response({"success": False, "message": "GenerateKeywords not implemented on this deployment"}, status=501)
+
+
+class GenerateBlog(APIView):
+    def post(self, request):
+        return Response({"success": False, "message": "GenerateBlog not implemented on this deployment"}, status=501)
+
+
+class RegenerateTitle(APIView):
+    def post(self, request):
+        return Response({"success": False, "message": "RegenerateTitle not implemented on this deployment"}, status=501)
+
+
+class RephraseBlog(APIView):
+    def post(self, request):
+        return Response({"success": False, "message": "RephraseBlog not implemented on this deployment"}, status=501)
+
+
+class HumanizeView(APIView):
+    def post(self, request):
+        return Response({"success": False, "message": "HumanizeView not implemented on this deployment"}, status=501)
+
+
+class BlogListCreateView(APIView):
+    def get(self, request):
+        return Response({"success": True, "data": []})
+
+    def post(self, request):
+        return Response({"success": False, "message": "Blog creation disabled"}, status=501)
+
+
+class BlogDetailView(APIView):
+    def get(self, request, pk):
+        return Response({"success": False, "message": "Blog not found"}, status=404)
+
+    def patch(self, request, pk):
+        return Response({"success": False, "message": "Update disabled"}, status=501)
+
+    def delete(self, request, pk):
+        return Response({"success": False, "message": "Delete disabled"}, status=501)
+
+
+class BlogBySlugView(APIView):
+    def get(self, request, slug):
+        return Response({"success": False, "message": "Blog not found"}, status=404)
+
+
+class BlogFavouriteView(APIView):
+    def post(self, request, pk):
+        return Response({"success": False, "message": "Favourite toggle disabled"}, status=501)
+
+
+class BlogStatsView(APIView):
+    def get(self, request):
+        return Response({"success": True, "data": {}})
+
+
+
 # class BlogFavouriteView(APIView):
 #     @require_token
 #     def post(self, request, pk):
