@@ -120,6 +120,11 @@ class CreateCheckoutSession(APIView):
                 {'success': False, 'message': str(exc), 'data': None},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        except Exception as exc:
+            return Response(
+                {'success': False, 'message': f'Internal server error: {str(exc)}', 'data': None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class PaymentStatus(APIView):
@@ -136,8 +141,10 @@ class PaymentStatus(APIView):
                     if subscription_id:
                         subscription = stripe.Subscription.retrieve(subscription_id)
                         _sync_user_subscription(user, subscription_id, _stripe_get(subscription, 'status'))
-            except StripeError:
-                pass
+            except StripeError as exc:
+                print(f"Stripe status retrieval error: {exc}")
+            except Exception as exc:
+                print(f"PaymentStatus unexpected error: {exc}")
 
         data = {
             'plan': user.plan,
@@ -153,8 +160,10 @@ class PaymentStatus(APIView):
                 data['current_period_start'] = _format_timestamp(
                     _stripe_get(subscription, 'current_period_start')
                 )
-            except StripeError:
-                pass
+            except StripeError as exc:
+                print(f"Stripe subscription retrieval error: {exc}")
+            except Exception as exc:
+                print(f"PaymentStatus subscription fetch error: {exc}")
 
         return Response(
             {
