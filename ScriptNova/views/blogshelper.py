@@ -49,7 +49,7 @@ def _nvidia_chat(prompt_text, model=QUALITY_MODEL, max_tokens=300, temperature=0
     # Use a conservative per-request timeout to avoid blocking gunicorn workers.
     # Cap the timeout to 25s for the HTTP request (the function still accepts a larger timeout
     # value to indicate an overall operation budget but each HTTP call must be short).
-    request_timeout = min(25, max(5, int(timeout)))
+    request_timeout = min(189, max(5, int(timeout)))
 
     last_error = None
     max_attempts = 2
