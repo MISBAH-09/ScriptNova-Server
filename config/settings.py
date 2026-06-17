@@ -76,9 +76,12 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 # CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
-    "https://script-nova-git-main-misbah-sehars-projects.vercel.app",
-    "https://script-nova-m3i2qg1gx-misbah-sehars-projects.vercel.app/",
-    "https://script-nova.vercel.app/",
+    origin.rstrip("/")
+    for origin in os.environ.get(
+        "CORS_ALLOWED_ORIGINS",
+        "https://script-nova-git-main-misbah-sehars-projects.vercel.app,https://script-nova-m3i2qg1gx-misbah-sehars-projects.vercel.app,https://script-nova.vercel.app",
+    ).split(",")
+    if origin.strip()
 ]
 
 # REST_FRAMEWORK = {
