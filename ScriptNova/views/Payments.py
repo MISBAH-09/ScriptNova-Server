@@ -105,7 +105,7 @@ class CreateCheckoutSession(APIView):
                 customer=user.stripe_customer_id,
                 client_reference_id=str(user.id),
                 line_items=[_checkout_line_item()],
-                success_url=f'{_frontend_url()}/dashboard?checkout=success&session_id={{CHECKOUT_SESSION_ID}}',
+                success_url=f'{_frontend_url()}/dashboard?section=subscription&checkout=success&session_id={{CHECKOUT_SESSION_ID}}',
                 cancel_url=f'{_frontend_url()}/?checkout=cancelled#pricing',
                 metadata={'user_id': str(user.id), 'plan': PRO_PLAN},
                 subscription_data={'metadata': {'user_id': str(user.id), 'plan': PRO_PLAN}},
@@ -126,6 +126,19 @@ class PaymentStatus(APIView):
     @require_token
     def get(self, request):
         user = request.auth_user
+        session_id = request.query_params.get('session_id')
+
+        if session_id and _stripe_configured():
+            try:
+                session = stripe.checkout.Session.retrieve(session_id)
+                if str(session.get('client_reference_id')) == str(user.id):
+                    subscription_id = _stripe_get(session, 'subscription')
+                    if subscription_id:
+                        subscription = stripe.Subscription.retrieve(subscription_id)
+                        _sync_user_subscription(user, subscription_id, _stripe_get(subscription, 'status'))
+            except StripeError:
+                pass
+
         data = {
             'plan': user.plan,
             'subscription_status': user.stripe_subscription_status,
