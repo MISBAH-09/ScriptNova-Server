@@ -46,24 +46,42 @@ def _nvidia_chat(prompt_text, model=QUALITY_MODEL, max_tokens=300, temperature=0
         "temperature": temperature,
         "stream": False,
     }
+    # Use a conservative per-request timeout to avoid blocking gunicorn workers.
+    # Cap the timeout to 25s for the HTTP request (the function still accepts a larger timeout
+    # value to indicate an overall operation budget but each HTTP call must be short).
+    request_timeout = min(25, max(5, int(timeout)))
+
     last_error = None
-    for attempt in range(3):
+    max_attempts = 2
+    for attempt in range(max_attempts):
         try:
-            r = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=timeout)
+            r = requests.post(INVOKE_URL, headers=headers, json=payload, timeout=request_timeout)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+        except requests.exceptions.Timeout as e:
             last_error = e
-            if attempt < 2:
-                time.sleep(3 * (attempt + 1))
+            # brief backoff between attempts
+            if attempt < max_attempts - 1:
+                time.sleep(2 * (attempt + 1))
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            if attempt < max_attempts - 1:
+                time.sleep(2 * (attempt + 1))
         except requests.exceptions.HTTPError as e:
+            # Explicitly surface auth errors as runtime errors so callers can return friendly responses
             if e.response is not None and e.response.status_code == 401:
                 raise RuntimeError(
-                    "NVIDIA rejected the API key. Check NVIDIA_API_KEY in "
-                    "Backend/ScriptNova-Backend/.env and restart the backend server."
+                    "NVIDIA rejected the API key. Check NVIDIA_API_KEY in the environment and restart the backend."
                 ) from e
-            raise
-    raise last_error
+            # For other HTTP errors, capture and break so we don't indefinitely retry
+            last_error = e
+            break
+        except Exception as e:
+            last_error = e
+            break
+
+    # Raise a controlled runtime error for the caller to handle (avoids leaking internal exceptions)
+    raise RuntimeError(f"External model call failed: {last_error}") from last_error
 
 # ── GROK CHAT HELPER ──────────────────────────────────────────────────────
 def _grok_chat(prompt_text, max_tokens=2500, temperature=1.18, model="llama-3.3-70b-versatile"):
@@ -527,208 +545,3 @@ def generate_blog_content(title, keywords, tone, length):
         f"- Separate paragraphs with a blank line\n\nOUTPUT: blog content only, no extra commentary.",
         model=QUALITY_MODEL, max_tokens=cfg["max_tokens"], temperature=0.6, timeout=360
     )
-
-
-# # ── Humanizer (two-pass) ──────────────────────────────────────────────────────
-
-# # def humanize_content(content, style="natural"):
-# #     """
-# #     Two-pass humanizer designed to reduce AI detection scores:
-
-# #     Pass 1 — Rewrites with Mixtral (MoE architecture = higher natural perplexity,
-# #               less uniform token distribution than pure RLHF models like Llama).
-# #               Temperature 0.92 pushes output off modal/predictable paths.
-
-# #     Pass 2 — Cheap roughen pass with the 8B model. Targets the exact structural
-# #               patterns that ZeroGPT and similar detectors key on:
-# #               uniform sentence length, filler transitions, repetitive openers.
-
-# #     style options: natural | conversational | storytelling | professional
-# #     """
-
-# #     style_instructions = {
-# #         "natural": (
-# #             "You are a human blogger rewriting an article in your own voice. "
-# #             "You write the way you think — not perfectly. "
-# #             "Mix very short sentences with longer rambling ones. "
-# #             "Start some sentences with 'And', 'But', 'So' — real writers do this. "
-# #             "Use contractions everywhere: don't, it's, you'll, they're, can't, won't. "
-# #             "Occasionally repeat a word or phrase for emphasis like real writers do. "
-# #             "Drop filler transitions like 'Furthermore', 'In conclusion', 'It is worth noting', 'Delve into'. "
-# #             "Replace high-vocabulary words with the simplest word that works. "
-# #             "Add one small personal aside or casual opinion — just one, not preachy. "
-# #             "No two consecutive paragraphs should have the same rhythm or length."
-# #         ),
-# #         "conversational": (
-# #             "You are writing this as if messaging a smart friend a long detailed message about a topic you care about. "
-# #             "Keep it loose and natural. Some sentences are half-finished thoughts. "
-# #             "Ask a rhetorical question mid-article like 'Makes sense, right?' or 'Sound familiar?'. "
-# #             "Use openers like 'Honestly,', 'Look,', 'Here's the thing —', 'The truth is,' to start paragraphs sometimes. "
-# #             "Short paragraphs. Contractions always. Zero corporate language. "
-# #             "If something is complicated, say so — then explain it simply."
-# #         ),
-# #         "storytelling": (
-# #             "You are a blogger who always opens with a scene or moment — never a fact or statistic. "
-# #             "Rewrite this article so the introduction puts the reader inside a specific situation. "
-# #             "Weave the information into the narrative rather than listing it. "
-# #             "Use 'I' once or twice naturally. "
-# #             "Write at least one sentence that is only three to five words — a gut-punch moment. "
-# #             "Write at least one sentence that runs long, building and building a point across multiple clauses "
-# #             "because you want the reader to feel the weight of it before you land. "
-# #             "Real writers have wildly uneven rhythms. Match that energy."
-# #         ),
-# #         "professional": (
-# #             "You are a senior industry practitioner — not a content marketer, not a copywriter. "
-# #             "Write with earned confidence and zero fluff. "
-# #             "Cut any sentence that doesn't add concrete information or insight. "
-# #             "Never hedge with phrases like 'It is important to note', 'One might argue', 'It goes without saying'. "
-# #             "Just say the thing directly. "
-# #             "Vary your sentence openings — no two consecutive sentences start the same way. "
-# #             "One sentence per section should be unusually short. A single sharp point. Like this. "
-# #             "Sound like a person who has done the work, not a model summarising a topic."
-# #         ),
-# #     }
-
-# #     instruction = style_instructions.get(style, style_instructions["natural"])
-
-# #     # ── Pass 1: Core rewrite — Mixtral for higher perplexity output ───────────
-# #     pass1_prompt = (
-# #         f"{instruction}\n\n"
-# #         f"NON-NEGOTIABLE RULES:\n"
-# #         f"- Keep ALL the same facts, data points, and information\n"
-# #         f"- Keep ALL ## markdown section headings exactly as they are\n"
-# #         f"- Keep **bold** formatting on important terms\n"
-# #         f"- Do NOT add new information or remove existing points\n"
-# #         f"- Do NOT write a meta-intro like 'Here is the rewritten article' — just start writing\n"
-# #         f"- Use simple, everyday vocabulary. No SAT words, no jargon unless it's the topic itself\n"
-# #         f"- Sentence lengths must vary wildly — mix 4-word sentences with 30-word sentences freely\n"
-# #         f"- Output the rewritten article only. Nothing else.\n\n"
-# #         f"ARTICLE TO REWRITE:\n{content}"
-# #     )
-
-# #     pass1_output = _nvidia_chat(
-# #         pass1_prompt,
-# #         model=HUMANIZE_MODEL,
-# #         max_tokens=3800,
-# #         temperature=0.92,   # high — push off modal token paths
-# #         timeout=360
-# #     )
-
-# #     # ── Pass 2: Roughen pass — fast 8B model, targets detector patterns ───────
-# #     pass2_prompt = (
-# #         f"Read this article carefully and make the following specific edits. "
-# #         f"Do not rewrite the whole thing — just apply these targeted fixes:\n\n"
-# #         f"1. Find any paragraph where all sentences are roughly the same length. "
-# #         f"   In that paragraph, split one sentence into two short ones, and merge two others into one longer run-on.\n\n"
-# #         f"2. Scan every word that sounds formal, elevated, or textbook-ish. "
-# #         f"   Replace it with the simplest everyday word that means the same thing.\n\n"
-# #         f"3. If three or more consecutive sentences start with the same word or the same type of opening "
-# #         f"   (like 'The', 'This', 'These' repeatedly), rewrite one of them to start differently.\n\n"
-# #         f"4. Add exactly one very short punchy sentence (4 to 6 words maximum) somewhere in the middle of "
-# #         f"   the article where the writing feels slow or dense.\n\n"
-# #         f"5. Hunt down and remove or rephrase any of these AI clichés wherever they appear: "
-# #         f"   'it's important to', 'in today's world', 'in this article', 'let's dive in', "
-# #         f"   'to summarize', 'in conclusion', 'it is worth noting', 'delve into', "
-# #         f"   'in the realm of', 'game-changer', 'revolutionize', 'leverage' (when used loosely).\n\n"
-# #         f"STRICT RULES:\n"
-# #         f"- Keep ALL ## markdown headings unchanged\n"
-# #         f"- Keep ALL the same information — do not add or remove facts\n"
-# #         f"- Don't use to much punctuation especially (—) this one \n"
-# #         f"- Output the final article only. No explanation of what you changed.\n\n"
-# #         f"- Not sound like an AI / agent/bot. must dteect ai less than 10% also ddont use high level vocabulary\n\n"
-# #         f"ARTICLE:\n{pass1_output}"
-# #     )
-
-# #     pass2_output = _nvidia_chat(
-# #         pass2_prompt,
-# #         model=ROUGHEN_MODEL,    # fast + cheap — no need for 70B here
-# #         max_tokens=3800,
-# #         temperature=0.85,
-# #         timeout=300
-# #     )
-
-# #     return pass2_output
-
-# def humanize_content(content, style="natural"):
-#     """
-#     3-pass humanizer to reduce AI detection without touching original meaning.
-#     """
-
-#     # ── PASS 1: Deep rewrite (high variation) ───────────────────────
-#     pass1_prompt = (
-#         "Rewrite this article like a real human wrote it.\n\n"
-#         "Rules:\n"
-#         "You are a human blogger rewriting an article in your own voice. "
-#         "Keep[ the length of the blog as it is -means in range of the article not too breif not too elaborate"
-#         "You write the way you think  not perfectly. "
-#         "Mix very short sentences with longer rambling ones. "
-#         "Start some sentences with 'And', 'But', 'So' — real writers do this. "
-#         "Use contractions everywhere: don't, it's, you'll, they're, can't, won't. "
-#         "Occasionally repeat a word or phrase for emphasis like real writers do. "
-#         "Drop filler transitions like 'Furthermore', 'In conclusion', 'It is worth noting', 'Delve into'. "
-#         "Replace high-vocabulary words with the simplest word that works. "
-#         "Add one small personal aside or casual opinion — just one, not preachy. "
-#         "No two consecutive paragraphs should have the same rhythm or length."
-#         "- Avoid perfect grammar \n"
-#         "- Avoid formal vocabulary\n"
-#         "- sounds like a human written\n\n"
-#         "- keep in mind that AI detections hould less than 5%\n\n"
-#         "- Dont use too much puntuation\n\n"
-#         "- Dont sound robotic or agent\n\n"
-#         "- Slight imperfection in flow\n\n"
-#         "- Dont use high level vocabulary\n\n"
-#         "Srict Rules:\n"
-#         "- length of sentence = Small to medium sentences"
-#         "- dont make a sentence more than 12-15 words!!!!!\n\n"
-#         "Keep markdown headings (##) unchanged.\n\n"
-#         f"ARTICLE:\n{content}"
-#     )
-
-#     pass1 = _grok_chat(
-#         pass1_prompt,
-#         max_tokens=3800,
-#         temperature=1.1,
-#         timeout=360
-#     )
-
-#     # ── PASS 2: Break AI patterns ───────────────────────────────────
-#     pass2_prompt = (
-#         "Make this text feel less like AI.\n\n"
-#         "Do this:\n"
-#         "1. Break uniform sentence patterns\n"
-#         "2. Add 1 slightly awkward sentence\n"
-#         "3. Add 1 rhetorical question\n"
-#         "4. Replace formal words with simple ones\n"
-#         "5. Remove robotic transitions\n\n"
-#         "Keep meaning same. Keep headings.\n\n"
-#         f"TEXT:\n{pass1}"
-#     )
-
-#     pass2 = _nvidia_chat(
-#         pass2_prompt,
-#         model=ROUGHEN_MODEL,
-#         max_tokens=3800,
-#         temperature=0.9,
-#         timeout=300
-#     )
-
-#     # ── PASS 3: Human noise injection ───────────────────────────────
-#     pass3_prompt = (
-#         "Final pass to make it human-like.\n\n"
-#         "Add:\n"
-#         "- Slight repetition of words\n"
-#         "- One very short sentence (3-5 words)\n"
-#         "- Slight imperfection in flow\n\n"
-#         "Do NOT change meaning.\n\n"
-#         f"TEXT:\n{pass2}"
-#     )
-
-#     pass3 = _nvidia_chat(
-#         pass3_prompt,
-#         model=FINAL_TOUCH_MODEL,
-#         max_tokens=3800,
-#         temperature=0.95,
-#         timeout=300
-#     )
-
-#     return pass1
