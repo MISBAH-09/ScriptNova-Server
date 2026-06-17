@@ -106,54 +106,53 @@ def _grok_chat(prompt_text, max_tokens=2500, temperature=1.18, model="llama-3.3-
 # ── MERGED ULTIMATE HUMANIZER ─────────────────────────────────────────────
 def humanize_content(content: str, style: str = "natural"):
     """
-    Combines Perplexity/Burstiness (ZeroGPT) and Structural Flipping (Quillbot) 
-    tactics into a single-pass deep humanizer.
-    """
-    
-    # Personas that naturally write with 'messy' AI-resistant structures
-    PERSONAS = [
-        "A skeptical field expert who uses 'I' and 'me' and hates corporate jargon.",
-        "A sharp-tongued blogger who writes in quick bursts and personal asides.",
-        "A technical veteran explaining things to a friend with 'real-talk' honesty."
-    ]
-    
-    selected_persona = random.choice(PERSONAS)
-    
-    # Randomly inject a 'Human Quirk' to break the AI's perfect logic flow
-    quirks = [
-        # "Use parentheses (like this) for a quick side-thought.",
-        "Start a sentence with 'Look,' or 'Honestly,' to sound more conversational.",
-        "Include a one-word sentence for emphasis.",
-        "Use a contraction like 'wouldn't' or 'it's' in every second sentence."
-    ]
-    selected_quirk = random.choice(quirks)
-
-    prompt = f"""
-    [SYSTEM: ACT AS {selected_persona.upper()}]
-    
-    TASK: Rewrite the text below to be completely undetectable by AI classifiers. 
-    You must destroy the 'AI footprint' by being statistically unpredictable.
-    
-    QUIRK TO INCLUDE: {selected_quirk}
-
-    ANTI-DETECTION RULES (STRICT):
-    1. BURSTINESS (ZeroGPT): Every paragraph must mix a very long, complex sentence (max 15 words) with a very short, punchy one (under 5 words).
-    2. LOGIC FLIPPING (Quillbot): Do not follow the original sentence order. Explain the 'result' or 'impact' first, then the 'process'.
-    3. NO SYNONYM SPINS: Don't just swap words. Rephrase the entire thought as if you're speaking out loud.
-    4. DELETE TRANSITIONS: Kill all words like 'Furthermore', 'Moreover', 'In addition', 'In conclusion', and 'Notably'.
-    5. I/ME PERSPECTIVE: Use first-person perspective or direct address ('you') to break formal AI neutrality.
-    6. you can pharaphrase some sentence to make it more human like and less ai like
-    7. Use simple, common words. If a simpler word exists, use it. Always.
-    
-    BANNED AI DNA: 
-    delve, tapestry, leverage, unlock, comprehensive, multifaceted, dynamic, testament, navigate, realm.
-
-    TEXT TO TRANSFORM:
-    {content}
+    Rewrites AI-generated blog content so it sounds more natural and human.
+    Uses NVIDIA NIM with the configured humanize model for the blog humanize path.
     """
 
-    # We use 70b-versatile because 8b models can't handle these complex logic flips
-    return _grok_chat(prompt, model="llama-3.3-70b-versatile")
+    style_instructions = {
+        "natural": (
+            "Rewrite this article so it sounds like a knowledgeable person wrote it — "
+            "casual, with natural sentence variety, occasional contractions, and some asides. "
+            "Avoid formal AI phrasing, robotic transitions, and vocabulary that feels too polished. "
+            "Keep the tone grounded and easy to read."
+        ),
+        "conversational": (
+            "Rewrite this article in a warm, conversational tone — like you're explaining it to a "
+            "smart friend over coffee. Use contractions freely, ask a rhetorical question now and then, "
+            "and keep the flow relaxed and engaging."
+        ),
+        "storytelling": (
+            "Rewrite this article using a storytelling approach. Open with a scene or real example, "
+            "weave in the information naturally, and keep the voice human and vivid."
+        ),
+        "professional": (
+            "Rewrite this article so it sounds like a senior industry professional wrote it — "
+            "clear, confident, and helpful, but still human. Avoid filler language and stiff AI phrasing."
+        ),
+    }
+
+    instruction = style_instructions.get(style, style_instructions["natural"])
+
+    prompt = (
+        f"{instruction}\n\n"
+        f"CRITICAL RULES:\n"
+        f"- Keep all existing information, structure, and markdown headings.\n"
+        f"- Do not add new facts or remove existing points.\n"
+        f"- Do not change the title.\n"
+        f"- Use varied sentence lengths, simple words, and natural phrasing.\n"
+        f"- Remove AI-like transitions such as 'Furthermore', 'Moreover', 'In conclusion'.\n"
+        f"- Keep the rewritten output in the same format as the original article.\n\n"
+        f"ARTICLE TO HUMANIZE:\n{content}"
+    )
+
+    return _nvidia_chat(
+        prompt,
+        model=HUMANIZE_MODEL,
+        max_tokens=3800,
+        temperature=0.75,
+        timeout=360,
+    )
 
 # ── EXAMPLE USAGE ──────────────────────────────────────────────────────────
 # result = humanize_content_v2("Your AI-generated text here")
