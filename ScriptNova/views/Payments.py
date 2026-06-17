@@ -1,3 +1,4 @@
+import datetime
 import os
 
 import stripe
@@ -29,6 +30,13 @@ def _stripe_get(obj, key, default=None):
 def _stripe_configured():
     stripe.api_key = os.getenv('STRIPE_SECRET_KEY', '')
     return bool(stripe.api_key)
+
+
+def _format_timestamp(timestamp):
+    try:
+        return datetime.datetime.utcfromtimestamp(int(timestamp)).isoformat() + 'Z'
+    except (TypeError, ValueError):
+        return None
 
 
 def _frontend_url():
@@ -118,14 +126,28 @@ class PaymentStatus(APIView):
     @require_token
     def get(self, request):
         user = request.auth_user
+        data = {
+            'plan': user.plan,
+            'subscription_status': user.stripe_subscription_status,
+        }
+
+        if user.stripe_subscription_id and _stripe_configured():
+            try:
+                subscription = stripe.Subscription.retrieve(user.stripe_subscription_id)
+                data['current_period_end'] = _format_timestamp(
+                    _stripe_get(subscription, 'current_period_end')
+                )
+                data['current_period_start'] = _format_timestamp(
+                    _stripe_get(subscription, 'current_period_start')
+                )
+            except StripeError:
+                pass
+
         return Response(
             {
                 'success': True,
                 'message': 'Payment status fetched',
-                'data': {
-                    'plan': user.plan,
-                    'subscription_status': user.stripe_subscription_status,
-                },
+                'data': data,
             },
             status=status.HTTP_200_OK,
         )
