@@ -8,6 +8,7 @@ from ScriptNova.views.Blogs import (
     BlogDiscussionView, BlogCommentView, BlogReactionView,
 )
 from ScriptNova.views.Payments import CreateCheckoutSession, PaymentStatus, StripeWebhook
+from ScriptNova.views.Health import Health
 
 app_name = 'ScriptNova'
 
@@ -40,4 +41,5 @@ urlpatterns = [
     path('payments/create-checkout-session/', CreateCheckoutSession.as_view(), name='create-checkout-session'),
     path('payments/status/',                  PaymentStatus.as_view(),         name='payment-status'),
     path('payments/stripe-webhook/',          StripeWebhook.as_view(),         name='stripe-webhook'),
+    path('health/', Health.as_view(), name='health'),
 ]
