@@ -118,17 +118,16 @@ def humanize_content(content: str, style: str = "natural"):
             "Keep the tone grounded and easy to read."
         ),
         "conversational": (
-            "Rewrite this article in a warm, conversational tone — like you're explaining it to a "
-            "smart friend over coffee. Use contractions freely, ask a rhetorical question now and then, "
-            "and keep the flow relaxed and engaging."
+            "Rewrite this article in a warm, conversational tone — like you're explaining it to a smart friend over coffee. "
+            "Use contractions freely, ask a rhetorical question now and then, and keep it feeling humane and easygoing."
         ),
         "storytelling": (
-            "Rewrite this article using a storytelling approach. Open with a scene or real example, "
-            "weave in the information naturally, and keep the voice human and vivid."
+            "Rewrite this article using a storytelling approach. Open with a scene or real example, weave in the information naturally, "
+            "and make the voice feel human, vivid, and readable."
         ),
         "professional": (
-            "Rewrite this article so it sounds like a senior industry professional wrote it — "
-            "clear, confident, and helpful, but still human. Avoid filler language and stiff AI phrasing."
+            "Rewrite this article so it sounds like a senior industry professional wrote it — clear, confident, and helpful, but still human. "
+            "Avoid filler language and stiff AI phrasing; keep it grounded and humane."
         ),
     }
 
@@ -137,11 +136,13 @@ def humanize_content(content: str, style: str = "natural"):
     prompt = (
         f"{instruction}\n\n"
         f"CRITICAL RULES:\n"
+        f"- Rewrite the article to sound humane and written by a real person.\n"
         f"- Keep all existing information, structure, and markdown headings.\n"
         f"- Do not add new facts or remove existing points.\n"
         f"- Do not change the title.\n"
         f"- Use varied sentence lengths, simple words, and natural phrasing.\n"
         f"- Remove AI-like transitions such as 'Furthermore', 'Moreover', 'In conclusion'.\n"
+        f"- Preserve the blog structure and the original meaning.\n"
         f"- Keep the rewritten output in the same format as the original article.\n\n"
         f"ARTICLE TO HUMANIZE:\n{content}"
     )
