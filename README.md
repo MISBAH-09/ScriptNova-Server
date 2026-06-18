@@ -2,6 +2,9 @@
 
 Django REST API powering the ScriptNova AI blog generation platform. Built with Django 5.2, Django REST Framework, MySQL, and NVIDIA NIM inference APIs.
 
+Live backend API: https://scriptnova-backend.onrender.com
+Frontend site: https://www.scriptnova.me/
+
 ---
 
 ## Tech Stack
