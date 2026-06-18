@@ -81,7 +81,7 @@ CORS_ALLOWED_ORIGINS = [
     origin.rstrip("/")
     for origin in os.environ.get(
         "CORS_ALLOWED_ORIGINS",
-        "https://script-nova-git-main-misbah-sehars-projects.vercel.app,https://script-nova-m3i2qg1gx-misbah-sehars-projects.vercel.app,https://script-nova.vercel.app",
+        " https://www.scriptnova.me, https://scriptnova.me,https://script-nova-m3i2qg1gx-misbah-sehars-projects.vercel.app,https://script-nova.vercel.app",
     ).split(",")
     if origin.strip()
 ]
